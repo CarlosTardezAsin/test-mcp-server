@@ -1,0 +1,25 @@
+{
+  "tag": "notification",
+  "expectedTools": [
+    "send-email",
+    "retrieve-email-info",
+    "list-email-templates",
+    "tts-callout",
+    "get-call-information",
+    "list-calls",
+    "get-session-information",
+    "tts-batch-callout",
+    "get-voice-batch-summary",
+    "send-text-message",
+    "send-location-message",
+    "send-choice-message",
+    "send-media-message",
+    "send-template-message",
+    "send-whatsapp-template-message",
+    "list-conversation-apps",
+    "list-messaging-templates"
+  ],
+  "expectedPrompts": [
+    "conversation-app-id"
+  ]
+}

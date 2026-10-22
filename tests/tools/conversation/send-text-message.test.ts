@@ -1,0 +1,79 @@
+import { sendTextMessageHandler } from '../../../src/tools/conversation/send-text-message';
+import {
+  getConversationAppId,
+  getConversationService,
+  setConversationRegion,
+} from '../../../src/tools/conversation/utils/conversation-service-helper';
+import { buildMessageBase } from '../../../src/tools/conversation/utils/send-message-builder';
+
+jest.mock(
+  '@sinch/sdk-core/package.json',
+  () => ({
+    version: '1.0.0',
+  }),
+  { virtual: true },
+);
+
+jest.mock('../../../src/tools/conversation/utils/conversation-service-helper');
+jest.mock('../../../src/tools/conversation/utils/send-message-builder', () => ({
+  ...jest.requireActual('../../../src/tools/conversation/utils/send-message-builder'),
+  buildMessageBase: jest.fn(),
+}));
+
+const mockSendTextMessage = jest.fn();
+const mockConversationService = {
+  setRegion: jest.fn(),
+  messages: {
+    sendTextMessage: mockSendTextMessage,
+  },
+};
+
+(getConversationAppId as jest.Mock).mockImplementation((id) => id ?? 'mock-app-id');
+(getConversationService as jest.Mock).mockReturnValue(mockConversationService);
+(buildMessageBase as jest.Mock).mockResolvedValue({ to: 'recipient', from: 'sender', channel: 'WHATSAPP' });
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+test('sendTextMessageHandler returns success response', async () => {
+  mockSendTextMessage.mockResolvedValue({ message_id: 'abc123' });
+
+  const result = await sendTextMessageHandler({
+    message: 'Hello!',
+    recipient: '+123456789',
+    channel: ['WHATSAPP'],
+    appId: undefined,
+    sender: undefined,
+    region: undefined,
+  });
+
+  const expectedResponse = JSON.stringify({
+    success: true,
+    message_id: 'abc123',
+  });
+
+  expect(result.content[0].text).toEqual(expectedResponse);
+});
+
+test('sendTextMessageHandler returns error response on failure', async () => {
+  mockSendTextMessage.mockRejectedValue(new Error('Oops'));
+  const region = 'eu';
+  (setConversationRegion as jest.Mock).mockReturnValue(region);
+
+  const result = await sendTextMessageHandler({
+    message: 'Hi',
+    recipient: '+123456789',
+    channel: ['RCS'],
+    appId: 'my-app-id',
+    sender: 'sender-id',
+    region,
+  });
+
+  const expectedResponse = JSON.stringify({
+    success: false,
+    error: 'Oops. If the resource cannot be found, the region parameter may be incorrect. Current region: eu.',
+  });
+
+  expect(result.content[0].text).toEqual(expectedResponse);
+});

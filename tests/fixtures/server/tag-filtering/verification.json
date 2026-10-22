@@ -1,0 +1,9 @@
+{
+  "tag": "verification",
+  "expectedTools": [
+    "number-lookup",
+    "report-sms-verification",
+    "start-sms-verification"
+  ],
+  "expectedPrompts": []
+}

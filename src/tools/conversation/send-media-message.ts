@@ -1,0 +1,101 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerTracedTool } from '../../telemetry/register-traced-tool';
+import { Conversation } from '@sinch/conversation';
+import { z } from 'zod';
+import {
+  Recipient,
+  ConversationAppIdOverride,
+  ConversationChannel,
+  ConversationRegionOverride,
+  MessageSenderNumberOverride,
+} from './prompt-schemas';
+import {
+  getConversationAppId,
+  getConversationService,
+  setConversationRegion,
+} from './utils/conversation-service-helper';
+import { ConversationToolKey, getToolName, toolsConfig } from './utils/conversation-tools-helper';
+import { isPromptResponse, matchesAnyTag } from '../../utils';
+import { buildMessageBase, formatSendError } from './utils/send-message-builder';
+import { IPromptResponse, PromptResponse, Tags } from '../../types';
+
+const SendMediaMessageSchema = {
+  recipient: Recipient,
+  url: z.string().describe('The URL of the media that will be the content of the message.'),
+  channel: ConversationChannel,
+  appId: ConversationAppIdOverride,
+  sender: MessageSenderNumberOverride,
+  region: ConversationRegionOverride,
+};
+
+type SendMediaMessage = z.infer<z.ZodObject<typeof SendMediaMessageSchema>>;
+
+const TOOL_KEY: ConversationToolKey = 'sendMediaMessage';
+const TOOL_NAME = getToolName(TOOL_KEY);
+
+export const registerSendMediaMessage = (server: McpServer, tags: Tags[]) => {
+  if (!matchesAnyTag(tags, toolsConfig[TOOL_KEY].tags)) {
+    return;
+  }
+
+  registerTracedTool(
+    server,
+    TOOL_NAME,
+    {
+      description:
+        'Send a media message from URL given in parameter to a contact on the specified channel. The contact can be a phone number in E.164 format, or the identifier for the specified channel. The media must be specified with its URL.',
+      inputSchema: SendMediaMessageSchema,
+    },
+    sendMediaMessageHandler,
+  );
+};
+
+export const sendMediaMessageHandler = async ({
+  recipient,
+  channel,
+  url,
+  appId,
+  sender,
+  region,
+}: SendMediaMessage): Promise<IPromptResponse> => {
+  const maybeAppId = getConversationAppId(appId);
+  if (isPromptResponse(maybeAppId)) {
+    return maybeAppId.promptResponse;
+  }
+  const conversationAppId = maybeAppId;
+
+  const maybeService = getConversationService(TOOL_NAME);
+  if (isPromptResponse(maybeService)) {
+    return maybeService.promptResponse;
+  }
+  const conversationService = maybeService;
+  const usedRegion = setConversationRegion(region, conversationService);
+
+  try {
+    const requestBase = await buildMessageBase(conversationService, conversationAppId, recipient, channel, sender);
+    const request: Conversation.SendMediaMessageRequestData<Conversation.IdentifiedBy> = {
+      sendMessageRequestBody: {
+        ...requestBase,
+        message: {
+          media_message: {
+            url: url,
+          },
+        },
+      },
+    };
+    const response = await conversationService.messages.sendMediaMessage(request);
+    return new PromptResponse(
+      JSON.stringify({
+        success: true,
+        message_id: response.message_id,
+      }),
+    ).promptResponse;
+  } catch (error) {
+    return new PromptResponse(
+      JSON.stringify({
+        success: false,
+        error: formatSendError(error, usedRegion),
+      }),
+    ).promptResponse;
+  }
+};

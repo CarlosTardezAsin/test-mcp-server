@@ -1,0 +1,102 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerTracedTool } from '../../telemetry/register-traced-tool';
+import { Conversation } from '@sinch/conversation';
+import { z } from 'zod';
+import {
+  getConversationAppId,
+  setConversationRegion,
+  getConversationService,
+} from './utils/conversation-service-helper';
+import { ConversationToolKey, getToolName, toolsConfig } from './utils/conversation-tools-helper';
+import { isPromptResponse, matchesAnyTag } from '../../utils';
+import { buildMessageBase, formatSendError } from './utils/send-message-builder';
+import {
+  Recipient,
+  ConversationAppIdOverride,
+  ConversationChannel,
+  ConversationRegionOverride,
+  MessageSenderNumberOverride,
+  TextMessage,
+} from './prompt-schemas';
+import { IPromptResponse, PromptResponse, Tags } from '../../types';
+
+const SendTextMessageSchema = {
+  recipient: Recipient,
+  message: TextMessage,
+  channel: ConversationChannel,
+  appId: ConversationAppIdOverride,
+  sender: MessageSenderNumberOverride,
+  region: ConversationRegionOverride,
+};
+
+type SendTextMessage = z.infer<z.ZodObject<typeof SendTextMessageSchema>>;
+
+const TOOL_KEY: ConversationToolKey = 'sendTextMessage';
+const TOOL_NAME = getToolName(TOOL_KEY);
+
+export const registerSendTextMessage = (server: McpServer, tags: Tags[]) => {
+  if (!matchesAnyTag(tags, toolsConfig[TOOL_KEY].tags)) {
+    return;
+  }
+
+  registerTracedTool(
+    server,
+    TOOL_NAME,
+    {
+      description:
+        'Send a text message to a contact on the specified channel. The contact can be a phone number in E.164 format, or the identifier for the specified channel.',
+      inputSchema: SendTextMessageSchema,
+    },
+    sendTextMessageHandler,
+  );
+};
+
+export const sendTextMessageHandler = async ({
+  recipient,
+  channel,
+  message,
+  appId,
+  sender,
+  region,
+}: SendTextMessage): Promise<IPromptResponse> => {
+  const maybeAppId = getConversationAppId(appId);
+  if (isPromptResponse(maybeAppId)) {
+    return maybeAppId.promptResponse;
+  }
+  const conversationAppId = maybeAppId;
+
+  const maybeService = getConversationService(TOOL_NAME);
+  if (isPromptResponse(maybeService)) {
+    return maybeService.promptResponse;
+  }
+  const conversationService = maybeService;
+  const usedRegion = setConversationRegion(region, conversationService);
+
+  try {
+    const requestBase = await buildMessageBase(conversationService, conversationAppId, recipient, channel, sender);
+    const request: Conversation.SendTextMessageRequestData<Conversation.IdentifiedBy> = {
+      sendMessageRequestBody: {
+        ...requestBase,
+        message: {
+          text_message: {
+            text: message,
+          },
+        },
+      },
+    };
+    const response = await conversationService.messages.sendTextMessage(request);
+    return new PromptResponse(
+      JSON.stringify({
+        success: true,
+        message_id: response.message_id,
+      }),
+    ).promptResponse;
+  } catch (error) {
+    return new PromptResponse(
+      JSON.stringify({
+        success: false,
+        error: formatSendError(error, usedRegion),
+      }),
+    ).promptResponse;
+  }
+};

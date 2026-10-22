@@ -1,0 +1,64 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerTracedTool } from '../../telemetry/register-traced-tool';
+import { z } from 'zod';
+import { isPromptResponse, matchesAnyTag } from '../../utils';
+import { getConversationService, setConversationRegion } from './utils/conversation-service-helper';
+import { ConversationToolKey, getToolName, toolsConfig } from './utils/conversation-tools-helper';
+import { buildRcsChannelCredential } from './utils/build-channel-credential';
+import { addChannelToApp } from './utils/app-tools-helper';
+import { IPromptResponse, Tags } from '../../types';
+import { ConversationAppId, ConversationRegionOverride } from './prompt-schemas';
+
+const SetRcsChannelOnAppSchema = {
+  appId: ConversationAppId,
+  senderId: z
+    .string()
+    .describe(
+      "Claimed identity for the RCS channel — use the `authName` field from get-rcs-sender/create-rcs-sender. Do NOT use the sender's `id`; that is a different identifier and will cause the channel to fail or disappear from the app.",
+    ),
+  bearerToken: z
+    .string()
+    .describe(
+      'Bearer token for the RCS channel — use the `authToken` field from get-rcs-sender/create-rcs-sender. Do NOT use `authName` here; it looks similar but belongs in `senderId`, not `bearerToken`.',
+    ),
+  region: ConversationRegionOverride,
+};
+
+type SetRcsChannelOnApp = z.infer<z.ZodObject<typeof SetRcsChannelOnAppSchema>>;
+
+const TOOL_KEY: ConversationToolKey = 'setRcsChannelOnApp';
+const TOOL_NAME = getToolName(TOOL_KEY);
+
+export const registerSetRcsChannelOnApp = (server: McpServer, tags: Tags[]) => {
+  if (!matchesAnyTag(tags, toolsConfig[TOOL_KEY].tags)) {
+    return;
+  }
+
+  registerTracedTool(
+    server,
+    TOOL_NAME,
+    {
+      description:
+        'Set (create or replace) the RCS channel on a Conversation API app. Requires the RCS sender ID and bearer token. To rename an app, use update-conversation-app instead. For vague requests such as "add messaging", ask whether the user means SMS, RCS, or WhatsApp and collect the required credentials before calling a tool.',
+      inputSchema: SetRcsChannelOnAppSchema,
+    },
+    setRcsChannelOnAppHandler,
+  );
+};
+
+export const setRcsChannelOnAppHandler = async ({
+  appId,
+  senderId,
+  bearerToken,
+  region,
+}: SetRcsChannelOnApp): Promise<IPromptResponse> => {
+  const maybeService = getConversationService(TOOL_NAME);
+  if (isPromptResponse(maybeService)) {
+    return maybeService.promptResponse;
+  }
+  const conversationService = maybeService;
+  const usedRegion = setConversationRegion(region, conversationService);
+
+  const credential = buildRcsChannelCredential(senderId, bearerToken);
+  return addChannelToApp(conversationService, usedRegion, appId, credential);
+};

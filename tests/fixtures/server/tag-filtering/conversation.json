@@ -1,0 +1,27 @@
+{
+  "tag": "conversation",
+  "expectedTools": [
+    "list-conversation-apps",
+    "create-conversation-app",
+    "update-conversation-app",
+    "delete-conversation-app",
+    "set-sms-channel-on-app",
+    "set-rcs-channel-on-app",
+    "set-whatsapp-channel-on-app",
+    "list-messaging-templates",
+    "send-choice-message",
+    "send-location-message",
+    "send-media-message",
+    "send-template-message",
+    "send-whatsapp-template-message",
+    "send-text-message",
+    "list-webhooks",
+    "get-webhook",
+    "create-webhook",
+    "update-webhook",
+    "delete-webhook"
+  ],
+  "expectedPrompts": [
+    "conversation-app-id"
+  ]
+}

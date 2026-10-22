@@ -1,0 +1,16 @@
+{
+  "tag": "rcs",
+  "expectedTools": [
+    "list-rcs-senders",
+    "get-rcs-sender",
+    "create-rcs-sender",
+    "update-rcs-sender",
+    "add-rcs-test-number",
+    "delete-rcs-test-number",
+    "resend-rcs-test-number-invite",
+    "get-rcs-number-capabilities",
+    "get-rcs-test-number-state",
+    "launch-rcs-sender"
+  ],
+  "expectedPrompts": []
+}

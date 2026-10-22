@@ -1,0 +1,12 @@
+build/
+coverage/
+dist/
+node_modules/
+.DS_Store
+.idea
+*.tsbuildinfo
+.npm
+.env
+*.db
+*.tgz
+.claude/
