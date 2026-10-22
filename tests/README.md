@@ -68,3 +68,5 @@ tests/
 
 See [`integration/llms/README.md`](integration/llms/README.md) for the mcp-jam
 suites, the no-real-API approach, and how to add a workflow.
+
+<!-- cambio temporal de prueba -->
